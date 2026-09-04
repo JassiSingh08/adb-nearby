@@ -135,14 +135,33 @@ async function connectTo(service, flags) {
   }
 
   // The connect path is the only one most people ever run, so it is the only
-  // place the rest of the tool gets discovered.
+  // place the rest of the tool gets discovered. Names only — pairing a label to
+  // each with a separator made three commands read as six.
   console.log(
-    c.dim(
-      "   adbn pair · QR pairing    adbn list · what's around    adbn doctor · why it won't connect",
-    ),
+    c.dim(`   also: adbn pair, adbn list, adbn doctor  ·  adbn --help`),
   );
 
   return 0;
+}
+
+/**
+ * A full-tunnel VPN swallows LAN traffic, so the phone is unreachable even on
+ * the same Wi-Fi — and adb reports that as a protocol fault, which sends people
+ * hunting for the wrong thing. Returns the tunnel interface, or null.
+ */
+async function vpnRouteTo(host) {
+  if (!host || process.platform !== "darwin") return null;
+  try {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { stdout } = await promisify(execFile)("route", ["-n", "get", host], {
+      timeout: 3000,
+    });
+    const iface = stdout.match(/interface:\s*(\S+)/)?.[1];
+    return iface && /^(utun|tun|ppp|ipsec)/.test(iface) ? iface : null;
+  } catch {
+    return null;
+  }
 }
 
 async function doctor() {
@@ -150,13 +169,71 @@ async function doctor() {
   if (version) ok(version);
   else fail("adb not found");
 
-  const services = await discover(6, { quiet: true });
+  const services = await discover(6);
   const attached = await adb.devices();
 
   console.log(`\n${c.bold("Discovered")}: ${services.length}`);
   services.forEach((s) => console.log(`  ${describe(s)}`));
   console.log(`\n${c.bold("Attached")}: ${attached.length}`);
   attached.forEach((d) => console.log(`  ${d.raw}`));
+
+  // Finding a device is not the same as being in a good state, so say so.
+  const notes = [];
+  const online = attached.filter((d) => d.state === "device");
+
+  if (online.some((d) => adb.isMdnsSerial(d.serial))) {
+    notes.push(
+      `A transport is attached under an mDNS name. Expo and anything else that\n` +
+        `     splits a serial on whitespace will say "device not found".\n` +
+        `     Fix: ${c.bold("adbn --clean")}`,
+    );
+  }
+  if (online.length > 1) {
+    notes.push(
+      `${online.length} transports attached, so plain adb will refuse with\n` +
+        `     "more than one device". Unplug USB, or pass ${c.bold("-s <serial>")}.`,
+    );
+  }
+  if (attached.some((d) => d.state === "unauthorized")) {
+    notes.push(
+      `A device is unauthorized — accept the "Allow USB debugging" prompt on it.`,
+    );
+  }
+  if (attached.some((d) => d.state === "offline")) {
+    notes.push(
+      `A device is offline: a dead transport from a previous session.\n` +
+        `     Fix: ${c.bold("adb disconnect")}, then ${c.bold("adbn")}.`,
+    );
+  }
+
+  const unattached = services.filter(
+    (s) =>
+      s.kind === "connect" &&
+      !online.some((d) => d.serial === `${s.host}:${s.port}`),
+  );
+  if (unattached.length && online.length === 0) {
+    notes.push(`Device found but not connected. Run ${c.bold("adbn")}.`);
+  }
+  if (services.some((s) => s.kind === "pairing")) {
+    notes.push(
+      `A device is waiting to pair. Run ${c.bold("adbn pair")} (or scan its QR).`,
+    );
+  }
+
+  const vpn = await vpnRouteTo(services[0]?.host);
+  if (vpn) {
+    notes.push(
+      `The route to ${services[0].host} goes via ${c.bold(vpn)}, a VPN tunnel.\n` +
+        `     LAN traffic is being captured; disconnect the VPN to reach the device.`,
+    );
+  }
+
+  if (notes.length) {
+    console.log(`\n${c.bold("Worth knowing")}:`);
+    notes.forEach((note, i) => console.log(`  ${i + 1}. ${note}`));
+  } else if (services.length) {
+    console.log(`\n${c.green("Nothing looks wrong.")}`);
+  }
 
   if (services.length === 0) {
     console.log(`\n${c.bold("Nothing is advertising. In order of likelihood:")}`);

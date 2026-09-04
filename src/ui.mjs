@@ -3,12 +3,12 @@ import readline from "node:readline";
 const isTTY = () => process.stdin.isTTY && process.stdout.isTTY;
 
 const C = {
-  dim: (s) => `[2m${s}[0m`,
-  bold: (s) => `[1m${s}[0m`,
-  cyan: (s) => `[36m${s}[0m`,
-  green: (s) => `[32m${s}[0m`,
-  red: (s) => `[31m${s}[0m`,
-  yellow: (s) => `[33m${s}[0m`,
+  dim: (s) => `\x1b[2m${s}\x1b[0m`,
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
+  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
+  green: (s) => `\x1b[32m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
+  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
 };
 
 export const c = C;
@@ -70,15 +70,15 @@ export async function select(title, items, render) {
     const height = items.length + 2;
 
     const draw = (first = false) => {
-      if (!first) process.stdout.write(`[${height}A`);
-      process.stdout.write(`${C.bold(title)}[K\n`);
+      if (!first) process.stdout.write(`\x1b[${height}A`);
+      process.stdout.write(`${C.bold(title)}\x1b[K\n`);
       items.forEach((item, i) => {
         const pointer = i === index ? C.cyan("❯") : " ";
         const label = i === index ? C.cyan(render(item)) : render(item);
-        process.stdout.write(`${pointer} ${label}[K\n`);
+        process.stdout.write(`${pointer} ${label}\x1b[K\n`);
       });
       process.stdout.write(
-        `${C.dim("↑/↓ move · enter select · q quit")}[K\n`,
+        `${C.dim("↑/↓ move · enter select · q quit")}\x1b[K\n`,
       );
     };
 
