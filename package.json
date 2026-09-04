@@ -1,0 +1,34 @@
+{
+  "name": "adb-nearby",
+  "version": "0.1.0",
+  "description": "Find Android devices on your network and connect adb in one step — with QR pairing, so you never type a six-digit code again.",
+  "keywords": [
+    "adb",
+    "android",
+    "wireless-debugging",
+    "adb-connect",
+    "adb-pair",
+    "react-native",
+    "expo",
+    "cli"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "adbn": "src/cli.mjs",
+    "adb-nearby": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs"
+  }
+}
