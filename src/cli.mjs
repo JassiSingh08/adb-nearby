@@ -315,12 +315,12 @@ async function listDevices(flags) {
   return 0;
 }
 
-async function doctor() {
+async function doctor(flags) {
   const version = await adb.version();
   if (version) ok(version);
   else fail("adb not found");
 
-  const services = await discover(6);
+  const services = await discover(flags.timeout);
   const attached = await adb.devices();
 
   console.log(`\n${c.bold("Discovered")}: ${services.length}`);
@@ -392,7 +392,17 @@ async function doctor() {
     console.log(`\n${c.green("Nothing looks wrong.")}`);
   }
 
-  if (services.length === 0) {
+  // Advertising and being connected are independent: records lapse, and adb's
+  // cache empties on a server restart. With working devices attached, silence
+  // is not a fault — telling someone their wireless debugging is off while they
+  // are using it over Wi-Fi is worse than saying nothing.
+  if (services.length === 0 && online.length > 0) {
+    console.log(
+      `\n${c.dim("Nothing is advertising, but devices are attached and working —")}\n` +
+        `${c.dim("mDNS records lapse and refresh on demand, so this is not a fault.")}\n` +
+        `${c.dim(`Only a problem if you need to find a NEW device: retry with `)}${c.bold("--timeout 20")}`,
+    );
+  } else if (services.length === 0) {
     console.log(`\n${c.bold("Nothing is advertising. In order of likelihood:")}`);
     console.log(`  1. Wireless debugging is off on the phone.`);
     console.log(
@@ -419,7 +429,7 @@ export async function main(argv = process.argv.slice(2)) {
 
   try {
     if (command === "doctor") {
-      await doctor();
+      await doctor(flags);
       return 0;
     }
 
