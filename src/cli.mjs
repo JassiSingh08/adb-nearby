@@ -134,7 +134,22 @@ async function connectTo(service, flags) {
   const model = await adb.getProp(serial, "ro.product.model");
   ok(`${model || "device"} on ${serial}`);
 
-  const attached = await adb.devices();
+  let attached = await adb.devices();
+
+  // A port rotation leaves the old transport behind, usually as `offline`.
+  // They accumulate with every wireless-debugging toggle and clutter every
+  // `adb devices` afterwards, so drop the ones for the host we just connected.
+  const stale = attached.filter(
+    (d) => d.serial !== serial && d.serial.startsWith(`${target.host}:`),
+  );
+  if (stale.length) {
+    for (const dead of stale) await adb.disconnect(dead.serial);
+    info(
+      `dropped ${stale.length} stale transport${stale.length > 1 ? "s" : ""} for ${target.host}`,
+    );
+    attached = await adb.devices();
+  }
+
   const online = attached.filter((d) => d.state === "device");
 
   const duplicates = online.filter((d) => adb.isMdnsSerial(d.serial));
