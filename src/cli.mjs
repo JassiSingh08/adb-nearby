@@ -7,6 +7,8 @@ const HELP = `
 ${c.bold("adb-nearby")} — find Android devices on your network and connect adb in one step
 
   ${c.bold("adbn")}                 discover, pick a device, connect
+  ${c.bold("adbn connect <host:port>")}
+                        connect straight to a known address
   ${c.bold("adbn devices")}         what is attached, named, with what is missing
   ${c.bold("adbn list")}            what is advertising on the network, and exit
   ${c.bold("adbn pair")}            show a QR code to pair a new device
@@ -106,17 +108,31 @@ async function connectTo(service, flags) {
     }
 
     // Nothing listening: the port almost always changed under us on the last
-    // wireless-debugging toggle. Flushing the mDNS cache is what fixes it, so
-    // retry once instead of making the user run the command twice.
-    info("that port is stale — flushing the mDNS cache and rescanning");
-    await adb.restartServerClean();
+    // wireless-debugging toggle.
+    info("that port is stale — rescanning");
 
-    const fresh = await discover(Math.max(6, flags.timeout));
-    const rediscovered = fresh.find(
-      (entry) => entry.kind === "connect" && entry.name === service.name,
-    );
+    // Match on host, not the mDNS name: a toggle rotates the port but keeps the
+    // address, and a caller who passed a bare address has no name to match on.
+    const findFresh = (services) =>
+      services.find(
+        (entry) =>
+          entry.kind === "connect" &&
+          entry.port !== service.port &&
+          (entry.host === service.host || entry.name === service.name),
+      );
 
-    if (rediscovered && rediscovered.port !== service.port) {
+    let rediscovered = findFresh(await discover(Math.max(6, flags.timeout)));
+
+    // Only if the record really is cached stale: restarting the server is the
+    // only way to flush it, and it drops every other device's connection too,
+    // so it is a last resort rather than the first move.
+    if (!rediscovered) {
+      info("still stale — flushing the mDNS cache");
+      await adb.restartServerClean();
+      rediscovered = findFresh(await discover(Math.max(6, flags.timeout)));
+    }
+
+    if (rediscovered) {
       target = rediscovered;
       info(`connecting to ${target.host}:${target.port}`);
       result = await adb.connect(target.host, target.port);
@@ -403,6 +419,25 @@ export async function main(argv = process.argv.slice(2)) {
 
     if (command === "devices" || command === "ls") {
       return listDevices(flags);
+    }
+
+    // Skips discovery when you already know the address — and, because the
+    // address may be stale, exercises the rediscover-and-retry path.
+    if (command === "connect") {
+      const at = rest[0]?.lastIndexOf(":") ?? -1;
+      if (at < 1) {
+        fail("pass an address: adbn connect 192.168.1.5:41039");
+        return 1;
+      }
+      return connectTo(
+        {
+          name: rest[0],
+          host: rest[0].slice(0, at),
+          port: Number(rest[0].slice(at + 1)),
+          kind: "connect",
+        },
+        flags,
+      );
     }
 
     if (command === "pair") {

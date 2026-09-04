@@ -38,6 +38,7 @@ that don't.
 
 ```sh
 adbn                          # discover, pick a device, connect
+adbn connect 192.168.1.5:41039   # straight to a known address
 adbn devices                  # what is attached, and what is missing
 adbn list                     # show what is advertising, then exit
 adbn list --json              # same, machine-readable
@@ -87,8 +88,13 @@ adb was still turned away, it says the device is unpaired and points at
 ### Stale ports heal themselves
 
 The connect port changes whenever wireless debugging is toggled, and mDNS keeps
-serving the old one for a while. When a connect is refused, `adbn` flushes the
-mDNS cache, rescans and retries once — so you should not have to run it twice.
+serving the old one for a while. When nothing is listening on the port, `adbn`
+rescans and retries with the address it finds, so you should not have to run it
+twice.
+
+It only restarts the adb server — the one way to flush a genuinely cached mDNS
+record — if a plain rescan still comes back stale, because that restart drops
+every other device's connection too.
 
 ### `--clean`
 
