@@ -7,7 +7,8 @@ const HELP = `
 ${c.bold("adb-nearby")} — find Android devices on your network and connect adb in one step
 
   ${c.bold("adbn")}                 discover, pick a device, connect
-  ${c.bold("adbn list")}            list what is advertising, and exit
+  ${c.bold("adbn devices")}         what is attached, named, with what is missing
+  ${c.bold("adbn list")}            what is advertising on the network, and exit
   ${c.bold("adbn pair")}            show a QR code to pair a new device
   ${c.bold("adbn pair <host:port> <code>")}
                         pair with the six-digit code instead
@@ -18,7 +19,7 @@ Options
                         Fixes tools that choke on mDNS-named transports, but
                         drops every existing adb connection.
   --timeout <seconds>   how long to wait for discovery (default 8)
-  --json                machine-readable output for list
+  --json                machine-readable output for list and devices
   -h, --help            this
 
 Requires wireless debugging: Settings → Developer options → Wireless debugging.
@@ -174,7 +175,7 @@ async function connectTo(service, flags) {
   // place the rest of the tool gets discovered. Names only — pairing a label to
   // each with a separator made three commands read as six.
   console.log(
-    c.dim(`   also: adbn pair, adbn list, adbn doctor  ·  adbn --help`),
+    c.dim(`   also: adbn devices, adbn pair, adbn doctor  ·  adbn --help`),
   );
 
   return 0;
@@ -198,6 +199,104 @@ async function vpnRouteTo(host) {
   } catch {
     return null;
   }
+}
+
+const connectionOf = (serial) => {
+  if (/^emulator-\d+/.test(serial)) return "emulator";
+  if (adb.isMdnsSerial(serial)) return "Wi-Fi*";
+  return /^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(serial) ? "Wi-Fi" : "USB";
+};
+
+/** What `adb devices` leaves you to work out yourself. */
+async function listDevices(flags) {
+  const attached = await adb.devices();
+
+  // Names and Android versions are the whole point of this over `adb devices`,
+  // but an offline transport cannot answer, so only ask the live ones.
+  const enriched = await Promise.all(
+    attached.map(async (device) => {
+      if (device.state !== "device") return { ...device, android: null };
+      const [release, sdk] = await Promise.all([
+        adb.getProp(device.serial, "ro.build.version.release"),
+        adb.getProp(device.serial, "ro.build.version.sdk"),
+      ]);
+      return {
+        ...device,
+        android: release ? `Android ${release}${sdk ? ` (API ${sdk})` : ""}` : null,
+        connection: connectionOf(device.serial),
+      };
+    }),
+  );
+
+  if (flags.json) {
+    const services = await discover(flags.timeout, { quiet: true });
+    const unconnected = services.filter(
+      (s) =>
+        s.kind === "connect" &&
+        !attached.some((d) => d.serial === `${s.host}:${s.port}`),
+    );
+    console.log(JSON.stringify({ attached: enriched, unconnected }, null, 2));
+    return 0;
+  }
+
+  if (enriched.length === 0) {
+    console.log("nothing attached");
+  } else {
+    console.log(c.bold("Attached"));
+    const width = Math.max(
+      ...enriched.map((d) => (d.model || d.serial).length),
+      8,
+    );
+    for (const device of enriched) {
+      const live = device.state === "device";
+      const dot = live ? c.green("●") : c.yellow("○");
+      const name = (device.model || device.serial).padEnd(width);
+      const note = live
+        ? device.android || ""
+        : c.yellow(
+            device.state === "offline"
+              ? "offline — stale, run adbn to clear"
+              : device.state,
+          );
+      console.log(
+        `  ${dot} ${name}  ${c.dim((device.connection || "").padEnd(8))}${device.serial}  ${note}`,
+      );
+      if (adb.isMdnsSerial(device.serial)) {
+        console.log(
+          c.dim(`      ↳ mDNS-named: breaks Expo. Fix with `) +
+            c.bold("adbn --clean"),
+        );
+      }
+    }
+  }
+
+  // Printed only after the attached list, because mDNS needs several seconds
+  // and a short window silently reports "nothing else out there".
+  const services = await discover(flags.timeout);
+  const unconnected = services.filter(
+    (s) =>
+      s.kind === "connect" &&
+      !attached.some((d) => d.serial === `${s.host}:${s.port}`),
+  );
+
+  if (unconnected.length) {
+    console.log(`\n${c.bold("On the network, not connected")}`);
+    unconnected.forEach((s) =>
+      console.log(`  ${c.dim("○")} ${s.name}  ${c.dim(`${s.host}:${s.port}`)}`),
+    );
+    console.log(c.dim(`  Run ${c.bold("adbn")} to connect one.`));
+  }
+
+  const online = enriched.filter(
+    (d) => d.state === "device" && !adb.isMdnsSerial(d.serial),
+  );
+  if (online.length > 1) {
+    console.log(
+      `\n${online.length} devices attached — plain adb will refuse. Target one with ${c.bold("-s <serial>")}`,
+    );
+  }
+
+  return 0;
 }
 
 async function doctor() {
@@ -300,6 +399,10 @@ export async function main(argv = process.argv.slice(2)) {
     if (command === "doctor") {
       await doctor();
       return 0;
+    }
+
+    if (command === "devices" || command === "ls") {
+      return listDevices(flags);
     }
 
     if (command === "pair") {

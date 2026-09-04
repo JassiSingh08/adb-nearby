@@ -95,7 +95,17 @@ export async function devices() {
     .filter(Boolean)
     .map((line) => {
       const [serial, state] = line.split(/\s+/);
-      return { serial, state, raw: line };
+      // `-l` already carries these, so naming a device costs no extra shell out.
+      const field = (key) => line.match(new RegExp(`\\b${key}:(\\S+)`))?.[1];
+      return {
+        serial,
+        state,
+        raw: line,
+        // `-l` substitutes underscores for hyphens: SM-S928B arrives as SM_S928B.
+        model: field("model")?.replace(/_/g, "-"),
+        product: field("product"),
+        transportId: field("transport_id"),
+      };
     })
     .filter((device) => device.serial);
 }

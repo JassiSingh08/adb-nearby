@@ -38,12 +38,32 @@ that don't.
 
 ```sh
 adbn                          # discover, pick a device, connect
+adbn devices                  # what is attached, and what is missing
 adbn list                     # show what is advertising, then exit
 adbn list --json              # same, machine-readable
 adbn pair                     # QR pairing for a new device
 adbn pair 192.168.1.5:37123 123456   # code pairing, if you prefer
 adbn doctor                   # explain why nothing is showing up
 ```
+
+### `adbn devices`
+
+What `adb devices` makes you work out yourself:
+
+```
+Attached
+  ● SM-S928B  Wi-Fi   192.168.29.178:45431  Android 16 (API 36)
+  ○ I2202     Wi-Fi   192.168.29.118:41039  offline — stale, run adbn to clear
+
+On the network, not connected
+  ○ adb-13930560280005N-VowoMk  192.168.29.118:40295
+  Run adbn to connect one.
+```
+
+Devices are named rather than numbered, with their Android version and how they
+are attached. Anything wrong is called out — an offline transport left by a port
+rotation, an mDNS-named one that will break Expo, or a device on the network you
+simply have not connected yet. `--json` for scripts.
 
 ### Pairing with a QR code
 
