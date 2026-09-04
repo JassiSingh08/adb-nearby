@@ -137,17 +137,21 @@ async function connectTo(service, flags) {
   const attached = await adb.devices();
   const online = attached.filter((d) => d.state === "device");
 
-  if (online.some((d) => adb.isMdnsSerial(d.serial))) {
+  const duplicates = online.filter((d) => adb.isMdnsSerial(d.serial));
+  // Counted apart from the duplicates: two transports for one phone is a
+  // problem to fix, whereas two phones is just how you were working.
+  const real = online.filter((d) => !adb.isMdnsSerial(d.serial));
+
+  if (duplicates.length) {
     warn(
-      "adb also auto-connected this device under an mDNS name.\n" +
-        "  Tools that split the serial at the space (Expo included) will fail\n" +
-        `  with "device not found". Rerun with ${c.bold("--clean")} to drop it.`,
+      `this device is attached twice — once as ${serial}, once under its mDNS name.\n` +
+        `  Tools that split a serial on whitespace (Expo included) will fail with\n` +
+        `  "device not found", and plain adb will say "more than one device".\n` +
+        `  Fix: ${c.bold("adbn --clean")}`,
     );
-  }
-  if (online.length > 1) {
-    warn(
-      `${online.length} transports attached — plain adb/expo will report "more than one device".\n` +
-        `  Unplug USB, or pass ${c.bold(`-s ${serial}`)}`,
+  } else if (real.length > 1) {
+    info(
+      `${real.length} devices attached. Target this one with ${c.bold(`-s ${serial}`)}`,
     );
   }
 
