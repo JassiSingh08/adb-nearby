@@ -34,10 +34,14 @@ export function spinner(label) {
 
   const started = Date.now();
   let frame = 0;
+  let live = true;
 
   const draw = () => {
+    if (!live) return;
     const elapsed = Math.floor((Date.now() - started) / 1000);
-    process.stdout.write(`\r${C.cyan(FRAMES[frame])} ${text(elapsed)}[K`);
+    // Erase the whole line, not just from the cursor: the previous frame can be
+    // longer than this one, and the tail would otherwise survive.
+    process.stdout.write(`\r[2K${C.cyan(FRAMES[frame])} ${text(elapsed)}`);
     frame = (frame + 1) % FRAMES.length;
   };
 
@@ -45,8 +49,10 @@ export function spinner(label) {
   const timer = setInterval(draw, 80);
 
   return () => {
+    if (!live) return;
+    live = false;
     clearInterval(timer);
-    process.stdout.write("\r[K");
+    process.stdout.write("\r[2K");
   };
 }
 

@@ -55,6 +55,12 @@ It works because the payload is the same one Android Studio emits
 (`WIFI:T:ADB;S:<name>;P:<password>;;`), with a name and password generated per
 run so the device advertises a pairing service we can recognise.
 
+### Stale ports heal themselves
+
+The connect port changes whenever wireless debugging is toggled, and mDNS keeps
+serving the old one for a while. When a connect is refused, `adbn` flushes the
+mDNS cache, rescans and retries once — so you should not have to run it twice.
+
 ### `--clean`
 
 ```sh

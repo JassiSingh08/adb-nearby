@@ -83,16 +83,37 @@ async function connectTo(service, flags) {
   }
 
   info(`connecting to ${service.host}:${service.port}`);
-  const result = await adb.connect(service.host, service.port);
+  let target = service;
+  let result = await adb.connect(target.host, target.port);
+
+  // A refused connect almost always means mDNS handed us a port from before the
+  // last wireless-debugging toggle. Restarting the server is what flushes that
+  // cache, so retry once rather than making the user run the command twice.
+  if (!result.ok && /refused/i.test(result.out)) {
+    info("that port is stale — flushing the mDNS cache and rescanning");
+    await adb.restartServerClean();
+
+    const fresh = await discover(Math.max(6, flags.timeout), { quiet: false });
+    const rediscovered = fresh.find(
+      (entry) => entry.kind === "connect" && entry.name === service.name,
+    );
+
+    if (rediscovered && rediscovered.port !== service.port) {
+      target = rediscovered;
+      info(`connecting to ${target.host}:${target.port}`);
+      result = await adb.connect(target.host, target.port);
+    }
+  }
+
   if (!result.ok) {
     fail(result.out || "connect failed");
     warn(
-      "the connect port changes every time wireless debugging is toggled — rerun to rediscover",
+      "wireless debugging may have been toggled off, or the device left the network",
     );
     return 1;
   }
 
-  const serial = `${service.host}:${service.port}`;
+  const serial = `${target.host}:${target.port}`;
   const model = await adb.getProp(serial, "ro.product.model");
   ok(`${model || "device"} on ${serial}`);
 
@@ -112,6 +133,14 @@ async function connectTo(service, flags) {
         `  Unplug USB, or pass ${c.bold(`-s ${serial}`)}`,
     );
   }
+
+  // The connect path is the only one most people ever run, so it is the only
+  // place the rest of the tool gets discovered.
+  console.log(
+    c.dim(
+      "   adbn pair · QR pairing    adbn list · what's around    adbn doctor · why it won't connect",
+    ),
+  );
 
   return 0;
 }
