@@ -13,6 +13,15 @@
     "cli"
   ],
   "license": "MIT",
+  "author": "Jassi Singh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JassiSingh08/adb-nearby.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JassiSingh08/adb-nearby/issues"
+  },
+  "homepage": "https://github.com/JassiSingh08/adb-nearby#readme",
   "type": "module",
   "bin": {
     "adbn": "src/cli.mjs",

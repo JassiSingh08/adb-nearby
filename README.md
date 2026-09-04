@@ -4,7 +4,8 @@ Find Android devices on your network and connect `adb` in one step — with QR
 pairing, so you never type a six-digit code again.
 
 ```sh
-npx adb-nearby
+npx adb-nearby          # one-off
+npm i -g adb-nearby     # then just `adbn`
 ```
 
 ```
@@ -46,6 +47,12 @@ adbn pair                     # QR pairing for a new device
 adbn pair 192.168.1.5:37123 123456   # code pairing, if you prefer
 adbn doctor                   # explain why nothing is showing up
 ```
+
+| option | |
+|---|---|
+| `--timeout <seconds>` | how long to scan (default 8). Raise it if a device was only just switched on. |
+| `--clean` | drop mDNS-named transports — see below |
+| `--json` | machine-readable output for `list` and `devices` |
 
 ### `adbn devices`
 
@@ -129,6 +136,14 @@ The two that catch people out:
   is unreachable even on the same Wi-Fi. On macOS, check whether the route to
   the phone resolves to a `utun*` interface:
   `route -n get <phone-ip>`.
+
+**"Discovered: 0" while devices are connected is normal.** Advertising and being
+connected are independent: mDNS records lapse, while open transports keep
+working. It only matters when you are trying to find a *new* device.
+
+**mDNS needs a few seconds.** Discovery scans for 8s by default because shorter
+windows report "nothing advertising" while a device is advertising the whole
+time. If a phone was only just switched on, try `--timeout 20`.
 
 Guest and corporate networks often block mDNS outright. There, discovery cannot
 work and you need the address directly: `adb connect <ip>:<port>`.
