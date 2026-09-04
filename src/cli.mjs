@@ -363,13 +363,24 @@ async function doctor(flags) {
     );
   }
 
+  // Not gated on nothing being connected: one phone attached and another
+  // sitting unconnected on the network is the case you most want told about,
+  // and it was the one case this stayed silent for.
   const unattached = services.filter(
     (s) =>
       s.kind === "connect" &&
-      !online.some((d) => d.serial === `${s.host}:${s.port}`),
+      !online.some(
+        (d) => d.serial === `${s.host}:${s.port}` || d.serial.includes(s.name),
+      ),
   );
-  if (unattached.length && online.length === 0) {
-    notes.push(`Device found but not connected. Run ${c.bold("adbn")}.`);
+  if (unattached.length) {
+    notes.push(
+      `${unattached.length} device${unattached.length > 1 ? "s are" : " is"} on the network but not connected:\n` +
+        unattached
+          .map((s) => `       ${s.name} ${c.dim(`${s.host}:${s.port}`)}`)
+          .join("\n") +
+        `\n     Run ${c.bold("adbn")} to connect.`,
+    );
   }
   if (services.some((s) => s.kind === "pairing")) {
     notes.push(
