@@ -41,7 +41,7 @@ export function spinner(label) {
     const elapsed = Math.floor((Date.now() - started) / 1000);
     // Erase the whole line, not just from the cursor: the previous frame can be
     // longer than this one, and the tail would otherwise survive.
-    process.stdout.write(`\r[2K${C.cyan(FRAMES[frame])} ${text(elapsed)}`);
+    process.stdout.write(`\r\x1b[2K${C.cyan(FRAMES[frame])} ${text(elapsed)}`);
     frame = (frame + 1) % FRAMES.length;
   };
 
@@ -52,7 +52,7 @@ export function spinner(label) {
     if (!live) return;
     live = false;
     clearInterval(timer);
-    process.stdout.write("\r[2K");
+    process.stdout.write("\r\x1b[2K");
   };
 }
 
