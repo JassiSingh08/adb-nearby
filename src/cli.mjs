@@ -307,8 +307,15 @@ async function listDevices(flags) {
     (d) => d.state === "device" && !adb.isMdnsSerial(d.serial),
   );
   if (online.length > 1) {
+    // A real serial, not a placeholder: this line exists to be copied.
     console.log(
-      `\n${online.length} devices attached — plain adb will refuse. Target one with ${c.bold("-s <serial>")}`,
+      `\n${online.length} devices attached — plain adb will refuse. Target one:\n` +
+        online
+          .map(
+            (d) =>
+              `  ${(d.model || "device").padEnd(10)} ${c.bold(`-s ${d.serial}`)}`,
+          )
+          .join("\n"),
     );
   }
 
