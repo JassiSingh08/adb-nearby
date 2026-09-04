@@ -86,14 +86,31 @@ async function connectTo(service, flags) {
   let target = service;
   let result = await adb.connect(target.host, target.port);
 
-  // A refused connect almost always means mDNS handed us a port from before the
-  // last wireless-debugging toggle. Restarting the server is what flushes that
-  // cache, so retry once rather than making the user run the command twice.
-  if (!result.ok && /refused/i.test(result.out)) {
+  if (!result.ok) {
+    // adb says "failed to connect" for both a dead port and a rejected
+    // handshake, so ask the socket which one it was.
+    const listening = await adb.tcpOpen(target.host, target.port);
+
+    if (listening) {
+      // Something is there and it turned us away: the device does not trust
+      // this machine. Nothing about reconnecting will help.
+      fail(`${target.host} refused the connection`);
+      console.log(
+        `  It is reachable, so this is almost certainly an unpaired device —\n` +
+          `  it will not accept adb until you pair with it once.\n\n` +
+          `  Fix: ${c.bold("adbn pair")}, then scan the QR on that device under\n` +
+          `  Settings → Developer options → Wireless debugging → Pair device with QR code`,
+      );
+      return 1;
+    }
+
+    // Nothing listening: the port almost always changed under us on the last
+    // wireless-debugging toggle. Flushing the mDNS cache is what fixes it, so
+    // retry once instead of making the user run the command twice.
     info("that port is stale — flushing the mDNS cache and rescanning");
     await adb.restartServerClean();
 
-    const fresh = await discover(Math.max(6, flags.timeout), { quiet: false });
+    const fresh = await discover(Math.max(6, flags.timeout));
     const rediscovered = fresh.find(
       (entry) => entry.kind === "connect" && entry.name === service.name,
     );

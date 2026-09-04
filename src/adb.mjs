@@ -126,3 +126,28 @@ export async function getProp(serial, prop) {
 /** A transport adb named from mDNS rather than an address. Expo and friends
  *  split these at the space and end up with a serial that matches no device. */
 export const isMdnsSerial = (serial) => serial.includes("._adb-tls-");
+
+/**
+ * Distinguishes "nothing is listening" from "adb refused us".
+ *
+ * adb reports both as `failed to connect`, but they need opposite fixes: a dead
+ * port means the mDNS record is stale, while an open port that adb still
+ * refuses means the TLS handshake was rejected — the device has not paired with
+ * this machine.
+ */
+export async function tcpOpen(host, port, timeoutMs = 3000) {
+  const net = await import("node:net");
+
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const finish = (result) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+    socket.connect(port, host);
+  });
+}

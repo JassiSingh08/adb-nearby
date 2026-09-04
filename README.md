@@ -55,6 +55,15 @@ It works because the payload is the same one Android Studio emits
 (`WIFI:T:ADB;S:<name>;P:<password>;;`), with a name and password generated per
 run so the device advertises a pairing service we can recognise.
 
+### Unpaired devices are named as such
+
+A device that has never been paired still advertises itself, so it shows up in
+the picker — and then refuses the connection. `adb` reports that identically to
+a dead port (`failed to connect`), which sends people looking for network
+faults. `adbn` probes the socket to tell the two apart: if the port is open and
+adb was still turned away, it says the device is unpaired and points at
+`adbn pair`.
+
 ### Stale ports heal themselves
 
 The connect port changes whenever wireless debugging is toggled, and mDNS keeps
