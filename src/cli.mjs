@@ -500,6 +500,27 @@ export async function main(argv = process.argv.slice(2)) {
     }
 
     if (services.length === 0) {
+      // Nothing new to connect is not a failure when things are already
+      // connected: mDNS records lapse while transports keep working.
+      const working = (await adb.devices()).filter(
+        (d) => d.state === "device" && !adb.isMdnsSerial(d.serial),
+      );
+
+      if (working.length) {
+        ok(
+          `nothing new is advertising, but ${working.length} device${working.length > 1 ? "s are" : " is"} already connected:`,
+        );
+        working.forEach((d) =>
+          console.log(`     ${d.model || "device"}  ${c.dim(d.serial)}`),
+        );
+        console.log(
+          c.dim(
+            `   Looking for another one? ${c.bold(`adbn --timeout ${Math.max(20, flags.timeout * 2)}`)} or ${c.bold("adbn pair")}`,
+          ),
+        );
+        return 0;
+      }
+
       fail("no devices advertising on this network");
       // mDNS needs a few seconds after the adb server starts, so an immediate
       // run right after flipping wireless debugging on often just missed it.
