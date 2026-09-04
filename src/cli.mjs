@@ -340,9 +340,15 @@ async function doctor() {
     );
   }
   if (online.length > 1) {
+    // Only worth suggesting the cable when there is actually one plugged in.
+    const usb = online.filter((d) => connectionOf(d.serial) === "USB");
     notes.push(
       `${online.length} transports attached, so plain adb will refuse with\n` +
-        `     "more than one device". Unplug USB, or pass ${c.bold("-s <serial>")}.`,
+        `     "more than one device". ` +
+        (usb.length
+          ? `Unplug USB, or target one:\n`
+          : `Target one:\n`) +
+        `     ${c.bold(`adb -s ${online[0].serial} …`)}, or ${c.bold(`export ANDROID_SERIAL=${online[0].serial}`)}`,
     );
   }
   if (attached.some((d) => d.state === "unauthorized")) {
