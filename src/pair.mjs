@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import qrcode from "qrcode-terminal";
 
 import * as adb from "./adb.mjs";
-import { c, fail, info, ok, warn } from "./ui.mjs";
+import { c, fail, info, ok, spinner, warn } from "./ui.mjs";
 
 /**
  * The phone's "Pair device with QR code" scanner reads the same payload
@@ -23,12 +23,20 @@ export async function pairWithQr({ timeoutMs = 120_000 } = {}) {
   console.log(
     `On the phone: ${c.bold("Settings → Developer options → Wireless debugging → Pair device with QR code")}`,
   );
-  info(`waiting up to ${Math.round(timeoutMs / 1000)}s for the scan…`);
-
-  const service = await adb.waitForService(
-    (entry) => entry.kind === "pairing" && entry.name === name,
-    { timeoutMs },
+  const total = Math.round(timeoutMs / 1000);
+  const stop = spinner(
+    (elapsed) => `waiting for the scan… ${Math.max(0, total - elapsed)}s left`,
   );
+
+  let service;
+  try {
+    service = await adb.waitForService(
+      (entry) => entry.kind === "pairing" && entry.name === name,
+      { timeoutMs },
+    );
+  } finally {
+    stop();
+  }
 
   if (!service) {
     fail(

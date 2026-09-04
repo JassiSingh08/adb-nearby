@@ -29,6 +29,7 @@
     "qrcode-terminal": "^0.12.0"
   },
   "scripts": {
-    "start": "node src/cli.mjs"
+    "start": "node src/cli.mjs",
+    "demo:picker": "node dev/picker-demo.mjs"
   }
 }

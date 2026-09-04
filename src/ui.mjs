@@ -17,6 +17,39 @@ export const ok = (msg) => console.log(`${C.green("ok:")} ${msg}`);
 export const warn = (msg) => console.error(`${C.yellow("warn:")} ${msg}`);
 export const fail = (msg) => console.error(`${C.red("error:")} ${msg}`);
 
+const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/**
+ * Returns a stop() that clears the line. Silent when stdout is not a TTY, so
+ * piped and CI output stays clean rather than filling with frames.
+ * `label` receives elapsed seconds so callers can show a countdown.
+ */
+export function spinner(label) {
+  const text = typeof label === "function" ? label : () => label;
+
+  if (!process.stdout.isTTY) {
+    console.log(text(0));
+    return () => {};
+  }
+
+  const started = Date.now();
+  let frame = 0;
+
+  const draw = () => {
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    process.stdout.write(`\r${C.cyan(FRAMES[frame])} ${text(elapsed)}[K`);
+    frame = (frame + 1) % FRAMES.length;
+  };
+
+  draw();
+  const timer = setInterval(draw, 80);
+
+  return () => {
+    clearInterval(timer);
+    process.stdout.write("\r[K");
+  };
+}
+
 /**
  * Arrow-key picker. Falls back to a numbered prompt when stdin is not a TTY,
  * so the tool still works under CI and piped shells.

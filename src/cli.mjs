@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import * as adb from "./adb.mjs";
 import { pairWithCode, pairWithQr } from "./pair.mjs";
-import { c, fail, info, ok, select, warn } from "./ui.mjs";
+import { c, fail, info, ok, select, spinner, warn } from "./ui.mjs";
 
 const HELP = `
 ${c.bold("adb-nearby")} — find Android devices on your network and connect adb in one step
@@ -40,21 +40,33 @@ function parseArgs(argv) {
   return { flags, positional };
 }
 
-async function discover(timeoutSec) {
+async function discover(timeoutSec, { quiet = false } = {}) {
   await adb.startServer();
 
   const deadline = Date.now() + timeoutSec * 1000;
-  let seen = [];
+  const seen = [];
+
+  const stop = quiet
+    ? () => {}
+    : spinner((elapsed) => {
+        const found = seen.length
+          ? `${seen.length} found`
+          : "nothing yet";
+        return `scanning the network… ${elapsed}s / ${timeoutSec}s  ${c.dim(found)}`;
+      });
 
   // mDNS answers trickle in, so keep looking until the window closes rather
   // than trusting the first reply.
-  for (;;) {
-    const services = await adb.mdnsServices();
-    for (const service of services) {
-      if (!seen.some((s) => s.name === service.name)) seen.push(service);
+  try {
+    for (;;) {
+      for (const service of await adb.mdnsServices()) {
+        if (!seen.some((s) => s.name === service.name)) seen.push(service);
+      }
+      if (Date.now() >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 700));
     }
-    if (Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, 700));
+  } finally {
+    stop();
   }
 
   return seen;
@@ -109,7 +121,7 @@ async function doctor() {
   if (version) ok(version);
   else fail("adb not found");
 
-  const services = await discover(6);
+  const services = await discover(6, { quiet: true });
   const attached = await adb.devices();
 
   console.log(`\n${c.bold("Discovered")}: ${services.length}`);
@@ -182,10 +194,15 @@ export async function main(argv = process.argv.slice(2)) {
 
     if (services.length === 0) {
       fail("no devices advertising on this network");
-      console.log(`  Run ${c.bold("adbn doctor")} to work out why.`);
+      // mDNS needs a few seconds after the adb server starts, so an immediate
+      // run right after flipping wireless debugging on often just missed it.
       console.log(
-        `  If the device has never been paired with this machine, run ${c.bold("adbn pair")}.`,
+        `  Just turned wireless debugging on? Give it longer: ${c.bold(`adbn --timeout ${Math.max(20, flags.timeout * 2)}`)}`,
       );
+      console.log(
+        `  Never paired with this machine? ${c.bold("adbn pair")}`,
+      );
+      console.log(`  Still nothing? ${c.bold("adbn doctor")}`);
       return 1;
     }
 
